@@ -67,11 +67,6 @@ export function InvoicesList({ invoices }: InvoicesListProps) {
     })
   }, [invoices, searchQuery, statusFilter, monthFilter])
 
-  // Reset to page 1 when filters change
-  useMemo(() => {
-    setCurrentPage(1)
-  }, [searchQuery, statusFilter, monthFilter])
-
   // Pagination calculations
   const totalPages = Math.ceil(filteredInvoices.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -87,6 +82,22 @@ export function InvoicesList({ invoices }: InvoicesListProps) {
       default:
         return <Badge variant="destructive">Unpaid</Badge>
     }
+  }
+
+  // Changing a filter jumps back to page 1
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    setCurrentPage(1)
+  }
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleMonthChange = (value: string) => {
+    setMonthFilter(value)
+    setCurrentPage(1)
   }
 
   const clearFilters = () => {
@@ -111,18 +122,18 @@ export function InvoicesList({ invoices }: InvoicesListProps) {
           <Input
             placeholder="Search by client name or invoice no (e.g., SJMW/01/26-27)..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9"
           />
         </div>
         <Input
           type="month"
           value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
+          onChange={(e) => handleMonthChange(e.target.value)}
           className="w-full sm:w-[170px]"
           aria-label="Filter by month"
         />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={handleStatusChange}>
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>

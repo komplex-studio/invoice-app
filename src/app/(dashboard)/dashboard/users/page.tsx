@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentProfile } from '@/lib/supabase/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -17,14 +18,8 @@ export default async function UsersPage() {
   const supabase = await createClient()
 
   // Check if user is admin
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const profile = await getCurrentProfile()
+  if (!profile) redirect('/login')
 
   if (profile?.role !== 'admin') {
     redirect('/dashboard')
@@ -42,7 +37,7 @@ export default async function UsersPage() {
           <h2 className="text-2xl font-bold tracking-tight">Users</h2>
           <p className="text-muted-foreground">Manage user accounts.</p>
         </div>
-        <UserManagementClient users={users || []} currentUserId={user.id} />
+        <UserManagementClient users={users || []} currentUserId={profile.id} />
       </div>
 
       <Card>
@@ -79,7 +74,7 @@ export default async function UsersPage() {
                     <TableCell className="text-right">
                       <UserManagementClient
                         users={users}
-                        currentUserId={user.id}
+                        currentUserId={profile.id}
                         editUser={u}
                         isInline
                       />

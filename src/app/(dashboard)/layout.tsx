@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentProfile } from '@/lib/supabase/auth'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -8,21 +8,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('username, email, role')
-    .eq('id', user.id)
-    .single()
+  const profile = await getCurrentProfile()
 
   if (!profile) {
     redirect('/login')
@@ -30,7 +16,7 @@ export default async function DashboardLayout({
 
   return (
     <>
-      <DashboardShell user={profile}>
+      <DashboardShell user={{ username: profile.username, email: profile.email, role: profile.role }}>
         {children}
       </DashboardShell>
       <Toaster />

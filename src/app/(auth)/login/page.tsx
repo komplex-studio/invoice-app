@@ -30,15 +30,17 @@ export default function LoginPage() {
 
       if (error) {
         toast.error(error.message)
+        setIsLoading(false)
         return
       }
 
-      toast.success('Login successful!')
-      router.push('/dashboard')
-      router.refresh()
+      // Keep the button in its loading state until the dashboard replaces this page.
+      // No router.refresh() here: /dashboard is dynamic and is fetched fresh anyway,
+      // and refreshing made the whole dashboard render twice.
+      toast.success('Login successful! Opening dashboard...')
+      router.replace('/dashboard')
     } catch {
       toast.error('An error occurred during login')
-    } finally {
       setIsLoading(false)
     }
   }

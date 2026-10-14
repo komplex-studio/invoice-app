@@ -5,23 +5,32 @@ import { FileText, Hash, DollarSign } from 'lucide-react'
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  const [invoicesResult, hsnResult] = await Promise.all([
-    supabase
-      .from('invoices')
-      .select('grand_total, paid_amount', { count: 'exact' })
-      .eq('is_deleted', false),
+  const [statsResult, hsnResult] = await Promise.all([
+    supabase.rpc('get_dashboard_stats').single<{ total_invoices: number; total_revenue: number }>(),
     supabase
       .from('hsn_catalog')
       .select('id', { count: 'exact', head: true })
       .eq('is_deleted', false),
   ])
 
-  const totalInvoices = invoicesResult.count || 0
-  const totalHsnCodes = hsnResult.count || 0
+  let totalInvoices: number
+  let totalRevenue: number
 
-  const totalRevenue =
-    invoicesResult.data?.reduce((sum, inv) => sum + (inv.grand_total || 0), 0) ||
-    0
+  if (statsResult.data) {
+    totalInvoices = Number(statsResult.data.total_invoices)
+    totalRevenue = Number(statsResult.data.total_revenue)
+  } else {
+    // Fallback until migration 005 (get_dashboard_stats) is applied
+    const invoicesResult = await supabase
+      .from('invoices')
+      .select('grand_total', { count: 'exact' })
+      .eq('is_deleted', false)
+    totalInvoices = invoicesResult.count || 0
+    totalRevenue =
+      invoicesResult.data?.reduce((sum, inv) => sum + (inv.grand_total || 0), 0) || 0
+  }
+
+  const totalHsnCodes = hsnResult.count || 0
 
   const stats = [
     {

@@ -1,18 +1,9 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentProfile } from '@/lib/supabase/auth'
 import { HsnCatalogForm } from '@/components/forms/hsn-catalog-form'
 
 export default async function NewHsnEntryPage() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const profile = await getCurrentProfile()
 
   if (profile?.role !== 'admin') {
     redirect('/dashboard')

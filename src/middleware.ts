@@ -29,9 +29,10 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // getClaims() refreshes an expired session and verifies the JWT locally
+  // (asymmetric signing keys), so it doesn't hit Supabase Auth on every request.
+  const { data } = await supabase.auth.getClaims()
+  const user = data?.claims ?? null
 
   // Protect dashboard routes
   if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
