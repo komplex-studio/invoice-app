@@ -14,9 +14,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { FileText, Loader2 } from 'lucide-react'
+import { Download, FileText, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { format } from 'date-fns'
+import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { formatInvoiceNumber } from '@/lib/utils'
 
 interface Invoice {
@@ -24,11 +24,19 @@ interface Invoice {
   invoice_number: number
   invoice_date: string
   client_name: string
+  gstin: string | null
+  sub_total: number
+  discount: number | null
+  cgst_amount: number
+  sgst_amount: number
   grand_total: number
   paid_amount: number
   due_amount: number
   payment_status: string
 }
+
+const formatAmount = (n: number) =>
+  n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function ReportsPage() {
   const [startDate, setStartDate] = useState('')
@@ -39,31 +47,50 @@ export default function ReportsPage() {
 
   const supabase = createClient()
 
-  const handleSearch = async () => {
-    if (!startDate || !endDate) return
+  const runReport = async (start: string, end: string) => {
+    if (!start || !end) return
 
     setIsLoading(true)
     setHasSearched(true)
 
     const { data } = await supabase
       .from('invoices')
-      .select('id, invoice_number, invoice_date, client_name, grand_total, paid_amount, due_amount, payment_status')
+      .select('id, invoice_number, invoice_date, client_name, gstin, sub_total, discount, cgst_amount, sgst_amount, grand_total, paid_amount, due_amount, payment_status')
       .eq('is_deleted', false)
-      .gte('invoice_date', startDate)
-      .lte('invoice_date', endDate)
-      .order('invoice_date', { ascending: false })
+      .gte('invoice_date', start)
+      .lte('invoice_date', end)
+      .order('invoice_date', { ascending: true })
+      .order('invoice_number', { ascending: true })
 
     setInvoices(data || [])
     setIsLoading(false)
   }
 
+  const handleSearch = () => runReport(startDate, endDate)
+
+  const selectMonth = (monthsAgo: number) => {
+    const month = subMonths(new Date(), monthsAgo)
+    const start = format(startOfMonth(month), 'yyyy-MM-dd')
+    const end = format(endOfMonth(month), 'yyyy-MM-dd')
+    setStartDate(start)
+    setEndDate(end)
+    runReport(start, end)
+  }
+
+  const handleDownloadPdf = () => {
+    window.open(`/report?start=${startDate}&end=${endDate}`, '_blank')
+  }
+
   const totals = invoices.reduce(
     (acc, inv) => ({
+      sale: acc.sale + inv.sub_total - (inv.discount || 0),
+      cgst: acc.cgst + inv.cgst_amount,
+      sgst: acc.sgst + inv.sgst_amount,
       total: acc.total + inv.grand_total,
       paid: acc.paid + inv.paid_amount,
       due: acc.due + inv.due_amount,
     }),
-    { total: 0, paid: 0, due: 0 }
+    { sale: 0, cgst: 0, sgst: 0, total: 0, paid: 0, due: 0 }
   )
 
   const getStatusBadge = (status: string) => {
@@ -81,7 +108,7 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Reports</h2>
-        <p className="text-muted-foreground">Generate date-wise invoice reports.</p>
+        <p className="text-muted-foreground">Generate date-wise sale reports and download them as PDF.</p>
       </div>
 
       <Card>
@@ -111,6 +138,12 @@ export default function ReportsPage() {
             <Button onClick={handleSearch} disabled={!startDate || !endDate || isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Generate Report
+            </Button>
+            <Button variant="outline" onClick={() => selectMonth(0)} disabled={isLoading}>
+              This Month
+            </Button>
+            <Button variant="outline" onClick={() => selectMonth(1)} disabled={isLoading}>
+              Last Month
             </Button>
           </div>
         </CardContent>
@@ -159,19 +192,30 @@ export default function ReportsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Invoice Report ({format(new Date(startDate), 'dd/MM/yyyy')} - {format(new Date(endDate), 'dd/MM/yyyy')})
-              </CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Sale Report ({format(parseISO(startDate), 'dd/MM/yyyy')} - {format(parseISO(endDate), 'dd/MM/yyyy')})
+                </CardTitle>
+                <Button onClick={handleDownloadPdf} disabled={invoices.length === 0}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download PDF
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {invoices.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Invoice #</TableHead>
+                      <TableHead>S.No</TableHead>
                       <TableHead>Date</TableHead>
-                      <TableHead>Client</TableHead>
+                      <TableHead>Bill No</TableHead>
+                      <TableHead>Party Name</TableHead>
+                      <TableHead>GST No</TableHead>
+                      <TableHead className="text-right">Sale 18%</TableHead>
+                      <TableHead className="text-right">CGST 9%</TableHead>
+                      <TableHead className="text-right">SGST 9%</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">Paid</TableHead>
                       <TableHead className="text-right">Due</TableHead>
@@ -179,16 +223,23 @@ export default function ReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {invoices.map((invoice) => (
+                    {invoices.map((invoice, index) => (
                       <TableRow key={invoice.id}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>
+                          {format(parseISO(invoice.invoice_date), 'dd/MM/yyyy')}
+                        </TableCell>
                         <TableCell className="font-medium">
                           {formatInvoiceNumber(invoice.invoice_number, invoice.invoice_date)}
                         </TableCell>
-                        <TableCell>
-                          {format(new Date(invoice.invoice_date), 'dd/MM/yyyy')}
-                        </TableCell>
                         <TableCell>{invoice.client_name}</TableCell>
+                        <TableCell>{invoice.gstin || '-'}</TableCell>
                         <TableCell className="text-right">
+                          {formatAmount(invoice.sub_total - (invoice.discount || 0))}
+                        </TableCell>
+                        <TableCell className="text-right">{formatAmount(invoice.cgst_amount)}</TableCell>
+                        <TableCell className="text-right">{formatAmount(invoice.sgst_amount)}</TableCell>
+                        <TableCell className="text-right font-medium">
                           Rs. {invoice.grand_total.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right text-green-600">
@@ -200,6 +251,16 @@ export default function ReportsPage() {
                         <TableCell>{getStatusBadge(invoice.payment_status)}</TableCell>
                       </TableRow>
                     ))}
+                    <TableRow className="bg-muted/50 font-bold hover:bg-muted/50">
+                      <TableCell colSpan={5} className="text-right">TOTAL</TableCell>
+                      <TableCell className="text-right">{formatAmount(totals.sale)}</TableCell>
+                      <TableCell className="text-right">{formatAmount(totals.cgst)}</TableCell>
+                      <TableCell className="text-right">{formatAmount(totals.sgst)}</TableCell>
+                      <TableCell className="text-right">Rs. {totals.total.toLocaleString('en-IN')}</TableCell>
+                      <TableCell className="text-right text-green-600">Rs. {totals.paid.toLocaleString('en-IN')}</TableCell>
+                      <TableCell className="text-right text-destructive">Rs. {totals.due.toLocaleString('en-IN')}</TableCell>
+                      <TableCell />
+                    </TableRow>
                   </TableBody>
                 </Table>
               ) : (

@@ -32,3 +32,18 @@ export function formatInvoiceNumber(invoiceNumber: number, invoiceDate: Date | s
   const fy = `${String(fyStart).slice(-2)}-${String(fyEnd).slice(-2)}`
   return `SJMW/${num}/${fy}`
 }
+
+// Heading for sale reports, e.g. "SALE FOR THE MONTH OF NOVEMBER-2024" when the
+// range covers exactly one calendar month, otherwise "SALE FROM dd/MM/yyyy TO dd/MM/yyyy".
+export function getSaleReportTitle(startDate: string, endDate: string) {
+  const [sy, sm, sd] = startDate.split('-').map(Number)
+  const [ey, em, ed] = endDate.split('-').map(Number)
+  const lastDayOfMonth = new Date(sy, sm, 0).getDate()
+  if (sy === ey && sm === em && sd === 1 && ed === lastDayOfMonth) {
+    const month = new Date(sy, sm - 1, 1).toLocaleString('en-US', { month: 'long' }).toUpperCase()
+    return `SALE FOR THE MONTH OF ${month}-${sy}`
+  }
+  const fmt = (y: number, m: number, d: number) =>
+    `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+  return `SALE FROM ${fmt(sy, sm, sd)} TO ${fmt(ey, em, ed)}`
+}
